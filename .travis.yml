@@ -1,11 +1,49 @@
 language: php
 php:
-  - '5.5'
   - '5.6'
   - '7.0'
+  - '7.1'
+
+env:
+  global:
+    - DB_HOST="127.0.0.1"
+    - DB_NAME="module-config-override"
+    - DB_USER="root"
+    - DB_PASS=""
+    - DB_TEST="module-config-override-test"
+    - MYSQL_CLI_CREDENTIALS=false
+    - BASE_URL="http://module-config-override.test/"
+  matrix:
+    - MAGENTO_VERSION="2.1.*"
+    - MAGENTO_VERSION="2.2.*"
+
+matrix:
+  exclude:
+    - php: "5.6"
+      env: MAGENTO_VERSION="2.2.*"
+    - php: "7.1"
+      env: MAGENTO_VERSION="2.1.*"
+
+cache:
+  directories:
+    - $HOME/.composer
+
 install:
-  - composer config http-basic.repo.magento.com $MAGENTO_REPO_PUBLIC_KEY $MAGENTO_REPO_PRIVATE_KEY
-  - composer install
+  - composer install -n
+before_script:
+  - phpenv config-rm xdebug.ini
 script:
-  - vendor/bin/phpunit src/Test/Unit
   - vendor/bin/phpcs --ignore=src/Test/ src/
+  - vendor/bin/phpunit src/Test/Unit
+  - composer require -n --dev --no-update magento/product-community-edition "$MAGENTO_VERSION"
+  - rm composer.lock
+  - composer install -n
+  - curl -Ls https://raw.githubusercontent.com/mmenozzi/m2-bash-ci/master/m2-bash-ci.sh | bash
+  - curl -O https://files.magerun.net/n98-magerun2.phar
+  - curl -LJO https://github.com/mikefarah/yq/releases/download/1.14.0/yq_linux_amd64
+  - chmod +x yq_linux_amd64
+  - touch app/etc/default.yml.dist
+  - ./yq_linux_amd64 w -i app/etc/default.yml.dist web.unsecure.base_url http://overridden-from-file.test/
+  - cat app/etc/default.yml.dist
+  - php n98-magerun2.phar cache:clean
+  - php n98-magerun2.phar dev:console "\$di->get('\Magento\Framework\App\Config')->getValue('web/unsecure/base_url');exit;" | grep http://overridden-from-file.test/

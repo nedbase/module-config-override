@@ -1,32 +1,33 @@
 <?php
 
-
 namespace Webgriffe\ConfigOverride\Block\System\Config\Form;
 
 use Magento\Backend\Block\Template\Context;
 use Magento\Config\Block\System\Config\Form\Field as BaseField;
+use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\Data\Form\Element\AbstractElement;
-use Webgriffe\ConfigOverride\Model\Config\DefaultYamlFile;
+use Webgriffe\ConfigOverride\Model\Config\AdditionalInterface;
 
 class Field extends BaseField
 {
-    const ACTION_SCOPE_TYPE = \Magento\Framework\App\Config\ScopeConfigInterface::SCOPE_TYPE_DEFAULT;
+    const ACTION_SCOPE_TYPE = ScopeConfigInterface::SCOPE_TYPE_DEFAULT;
 
     /**
-     * @var DefaultYamlFile
+     * @var array
      */
-    private $defaultYamlFile;
+    private $flatOverriddenConfig;
 
-    public function __construct(Context $context, DefaultYamlFile $defaultYamlFile, array $data = [])
+    public function __construct(Context $context, AdditionalInterface $additionalConfig, array $data = [])
     {
         parent::__construct($context, $data);
-        $this->defaultYamlFile = $defaultYamlFile;
+        $this->flatOverriddenConfig = $additionalConfig->asFlattenArray();
     }
 
     protected function _getElementHtml(AbstractElement $element)
     {
         if ($element->getData('scope') === self::ACTION_SCOPE_TYPE) {
             if ($this->isElementValueOverridden($element)) {
+                $element->setValue($this->getElementOverriddenValue($element));
                 $element->setData('disabled', true);
                 $element->setComment(
                     sprintf(
@@ -49,7 +50,17 @@ class Field extends BaseField
     {
         $fieldConfig = $element->getData('field_config');
         $path = $fieldConfig['path'] . '/' . $fieldConfig['id'];
-        $flattenOverridenValues = $this->defaultYamlFile->asFlattenArray();
-        return array_key_exists($path, $flattenOverridenValues);
+        return array_key_exists($path, $this->flatOverriddenConfig);
+    }
+
+    /**
+     * @param AbstractElement $element
+     * @return string
+     */
+    protected function getElementOverriddenValue(AbstractElement $element)
+    {
+        $fieldConfig = $element->getData('field_config');
+        $path = $fieldConfig['path'] . '/' . $fieldConfig['id'];
+        return $this->flatOverriddenConfig[$path];
     }
 }
